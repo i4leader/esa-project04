@@ -1,10 +1,46 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>树洞 - 说出你的秘密</title>
   <style>
+    :root {
+      --bg-primary: #1a1a2e;
+      --bg-secondary: #16213e;
+      --bg-tertiary: #0f3460;
+      --bg-card: rgba(255, 255, 255, 0.05);
+      --bg-input: rgba(0, 0, 0, 0.3);
+      --text-primary: #e8e8e8;
+      --text-secondary: #888;
+      --text-muted: #666;
+      --border-color: rgba(255, 255, 255, 0.1);
+      --warning-bg: rgba(255, 193, 7, 0.1);
+      --warning-border: rgba(255, 193, 7, 0.3);
+      --warning-text: #ffc107;
+      --accent-start: #00d9ff;
+      --accent-end: #00ff88;
+      --shadow: rgba(0, 0, 0, 0.3);
+    }
+
+    [data-theme="light"] {
+      --bg-primary: #f5f7fa;
+      --bg-secondary: #e8ecf1;
+      --bg-tertiary: #dde3ea;
+      --bg-card: rgba(255, 255, 255, 0.8);
+      --bg-input: rgba(255, 255, 255, 0.9);
+      --text-primary: #2c3e50;
+      --text-secondary: #5a6c7d;
+      --text-muted: #8899a6;
+      --border-color: rgba(0, 0, 0, 0.1);
+      --warning-bg: rgba(255, 193, 7, 0.15);
+      --warning-border: rgba(255, 152, 0, 0.4);
+      --warning-text: #e65100;
+      --accent-start: #0099cc;
+      --accent-end: #00aa66;
+      --shadow: rgba(0, 0, 0, 0.1);
+    }
+
     * {
       margin: 0;
       padding: 0;
@@ -13,43 +49,75 @@
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 50%, var(--bg-tertiary) 100%);
       min-height: 100vh;
-      color: #e8e8e8;
+      color: var(--text-primary);
+      transition: background 0.3s, color 0.3s;
     }
 
     .container {
-      max-width: 1200px;
+      max-width: 1000px;
       margin: 0 auto;
       padding: 20px 40px;
     }
 
+    @media (max-width: 768px) {
+      .container {
+        padding: 16px;
+      }
+    }
+
+    /* Header */
     header {
       text-align: center;
       padding: 40px 0 20px;
+      position: relative;
     }
 
     header h1 {
       font-size: 2.5rem;
       margin-bottom: 10px;
-      background: linear-gradient(90deg, #00d9ff, #00ff88);
+      background: linear-gradient(90deg, var(--accent-start), var(--accent-end));
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
     }
 
     header p {
-      color: #888;
+      color: var(--text-secondary);
       font-size: 0.95rem;
     }
 
-    /* 内容规范提示 */
+    /* Theme Toggle */
+    .theme-toggle {
+      position: absolute;
+      top: 40px;
+      right: 0;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 25px;
+      padding: 8px 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+      transition: all 0.3s;
+    }
+
+    .theme-toggle:hover {
+      border-color: var(--accent-start);
+      color: var(--accent-start);
+    }
+
+    /* Guidelines */
     .guidelines {
-      background: rgba(255, 193, 7, 0.1);
-      border: 1px solid rgba(255, 193, 7, 0.3);
+      background: var(--warning-bg);
+      border: 1px solid var(--warning-border);
       border-radius: 12px;
       padding: 16px 24px;
-      margin-bottom: 24px;
+      margin-bottom: 30px;
       display: flex;
       align-items: flex-start;
       gap: 12px;
@@ -61,69 +129,60 @@
     }
 
     .guidelines-content h3 {
-      color: #ffc107;
+      color: var(--warning-text);
       font-size: 0.95rem;
       margin-bottom: 8px;
     }
 
     .guidelines-content p {
-      color: #aaa;
+      color: var(--text-secondary);
       font-size: 0.85rem;
       line-height: 1.6;
     }
 
-    .guidelines-content ul {
-      color: #999;
+    .guidelines-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      margin-top: 10px;
+      list-style: none;
+    }
+
+    .guidelines-list li {
+      color: var(--text-muted);
       font-size: 0.8rem;
-      margin-top: 8px;
-      padding-left: 20px;
     }
 
-    .guidelines-content li {
-      margin-bottom: 4px;
+    /* Post Section - Center */
+    .post-section {
+      margin-bottom: 40px;
     }
 
-    .main-content {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 40px;
-    }
-
-    @media (max-width: 900px) {
-      .main-content {
-        grid-template-columns: 1fr;
-      }
-      .container {
-        padding: 20px;
-      }
-    }
-
-    .post-section h2,
-    .feed-section h2 {
+    .section-title {
       font-size: 1.2rem;
       margin-bottom: 16px;
-      color: #ccc;
+      color: var(--text-secondary);
       display: flex;
       align-items: center;
       gap: 8px;
     }
 
     .post-form {
-      background: rgba(255, 255, 255, 0.05);
+      background: var(--bg-card);
       border-radius: 16px;
       padding: 24px;
       backdrop-filter: blur(10px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      border: 1px solid var(--border-color);
     }
 
     .post-form textarea {
       width: 100%;
-      height: 180px;
-      background: rgba(0, 0, 0, 0.3);
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      height: 150px;
+      background: var(--bg-input);
+      border: 1px solid var(--border-color);
       border-radius: 12px;
       padding: 16px;
-      color: #fff;
+      color: var(--text-primary);
       font-size: 1rem;
       resize: none;
       outline: none;
@@ -131,11 +190,11 @@
     }
 
     .post-form textarea:focus {
-      border-color: #00d9ff;
+      border-color: var(--accent-start);
     }
 
     .post-form textarea::placeholder {
-      color: #666;
+      color: var(--text-muted);
     }
 
     .form-footer {
@@ -146,7 +205,7 @@
     }
 
     .char-count {
-      color: #666;
+      color: var(--text-muted);
       font-size: 0.85rem;
     }
 
@@ -155,7 +214,7 @@
     }
 
     .post-btn {
-      background: linear-gradient(90deg, #00d9ff, #00ff88);
+      background: linear-gradient(90deg, var(--accent-start), var(--accent-end));
       border: none;
       padding: 12px 32px;
       border-radius: 25px;
@@ -168,7 +227,7 @@
 
     .post-btn:hover {
       transform: translateY(-2px);
-      box-shadow: 0 5px 20px rgba(0, 217, 255, 0.3);
+      box-shadow: 0 5px 20px var(--shadow);
     }
 
     .post-btn:disabled {
@@ -178,48 +237,59 @@
     }
 
     .post-hint {
-      color: #666;
+      color: var(--text-muted);
       font-size: 0.8rem;
       margin-top: 12px;
       text-align: center;
     }
 
+    /* Feed Section - Bottom */
     .feed-section {
-      max-height: calc(100vh - 200px);
+      margin-top: 20px;
+    }
+
+    .feed-header {
       display: flex;
-      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .refresh-btn {
+      background: transparent;
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      padding: 6px 14px;
+      border-radius: 15px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .refresh-btn:hover {
+      border-color: var(--accent-start);
+      color: var(--accent-start);
     }
 
     .messages {
-      display: flex;
-      flex-direction: column;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
       gap: 16px;
-      overflow-y: auto;
-      flex: 1;
-      padding-right: 8px;
-    }
-
-    .messages::-webkit-scrollbar {
-      width: 6px;
-    }
-
-    .messages::-webkit-scrollbar-track {
-      background: rgba(255, 255, 255, 0.05);
-      border-radius: 3px;
-    }
-
-    .messages::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.2);
-      border-radius: 3px;
     }
 
     .message {
-      background: rgba(255, 255, 255, 0.05);
+      background: var(--bg-card);
       border-radius: 16px;
       padding: 20px;
       backdrop-filter: blur(10px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      border: 1px solid var(--border-color);
       animation: fadeIn 0.3s ease;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .message:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px var(--shadow);
     }
 
     @keyframes fadeIn {
@@ -234,15 +304,16 @@
     }
 
     .message-content {
-      font-size: 1rem;
+      font-size: 0.95rem;
       line-height: 1.6;
       white-space: pre-wrap;
       word-break: break-word;
+      color: var(--text-primary);
     }
 
     .message-time {
-      color: #666;
-      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-size: 0.75rem;
       margin-top: 12px;
       display: flex;
       align-items: center;
@@ -254,9 +325,10 @@
     }
 
     .empty-state {
+      grid-column: 1 / -1;
       text-align: center;
       padding: 60px 20px;
-      color: #666;
+      color: var(--text-muted);
     }
 
     .empty-state .icon {
@@ -265,11 +337,13 @@
     }
 
     .loading {
+      grid-column: 1 / -1;
       text-align: center;
       padding: 40px;
-      color: #666;
+      color: var(--text-muted);
     }
 
+    /* Toast */
     .toast {
       position: fixed;
       bottom: 30px;
@@ -291,7 +365,7 @@
     }
 
     .toast.success {
-      background: linear-gradient(90deg, #00d9ff, #00ff88);
+      background: linear-gradient(90deg, var(--accent-start), var(--accent-end));
       color: #1a1a2e;
     }
 
@@ -299,27 +373,11 @@
       background: #ff6b6b;
     }
 
-    .refresh-btn {
-      background: transparent;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      color: #888;
-      padding: 6px 12px;
-      border-radius: 15px;
-      font-size: 0.8rem;
-      cursor: pointer;
-      margin-left: auto;
-      transition: all 0.2s;
-    }
-
-    .refresh-btn:hover {
-      border-color: #00d9ff;
-      color: #00d9ff;
-    }
-
+    /* Footer */
     footer {
       text-align: center;
-      padding: 30px;
-      color: #555;
+      padding: 40px 20px;
+      color: var(--text-muted);
       font-size: 0.8rem;
     }
   </style>
@@ -329,6 +387,10 @@
     <header>
       <h1>🌳 树洞</h1>
       <p>说出你的秘密，24小时后它将消失在风中...</p>
+      <button class="theme-toggle" onclick="toggleTheme()">
+        <span id="themeIcon">🌙</span>
+        <span id="themeText">深色模式</span>
+      </button>
     </header>
 
     <div class="guidelines">
@@ -336,41 +398,39 @@
       <div class="guidelines-content">
         <h3>内容发布规范</h3>
         <p>树洞是一个分享心情的地方，请文明发言，共同维护良好的社区环境。</p>
-        <ul>
-          <li>🚫 禁止发布政治敏感、违法违规内容</li>
-          <li>🚫 禁止发布诈骗、广告、垃圾信息</li>
-          <li>� 禁止泄露他人隐私（姓名、电话、地址等）</li>
-          <li>🚫 禁止发布色情、暴力、恐怖内容</li>
-          <li>💡 请勿分享自己的敏感个人信息</li>
+        <ul class="guidelines-list">
+          <li>🚫 政治敏感内容</li>
+          <li>🚫 诈骗/广告信息</li>
+          <li>🚫 他人隐私信息</li>
+          <li>🚫 色情/暴力内容</li>
+          <li>💡 保护个人隐私</li>
         </ul>
       </div>
     </div>
 
-    <div class="main-content">
-      <div class="post-section">
-        <h2>✏️ 写下你的心声</h2>
-        <div class="post-form">
-          <textarea 
-            id="messageInput" 
-            placeholder="在这里写下你想说的话...&#10;&#10;可以是今天的心情、一个小秘密、或者任何想倾诉的事情。&#10;记住：不要分享敏感的个人信息哦~"
-            maxlength="1000"
-          ></textarea>
-          <div class="form-footer">
-            <span class="char-count" id="charCount">0 / 1000</span>
-            <button class="post-btn" id="postBtn" onclick="postMessage()">投入树洞</button>
-          </div>
-          <p class="post-hint">按 Ctrl + Enter 快速发送 | 消息将在 24 小时后自动消失 ✨</p>
+    <div class="post-section">
+      <h2 class="section-title">✏️ 写下你的心声</h2>
+      <div class="post-form">
+        <textarea 
+          id="messageInput" 
+          placeholder="在这里写下你想说的话...&#10;&#10;可以是今天的心情、一个小秘密、或者任何想倾诉的事情。&#10;记住：不要分享敏感的个人信息哦~"
+          maxlength="1000"
+        ></textarea>
+        <div class="form-footer">
+          <span class="char-count" id="charCount">0 / 1000</span>
+          <button class="post-btn" id="postBtn" onclick="postMessage()">投入树洞</button>
         </div>
+        <p class="post-hint">按 Ctrl + Enter 快速发送 | 消息将在 24 小时后自动消失 ✨</p>
       </div>
+    </div>
 
-      <div class="feed-section">
-        <h2>
-          📜 树洞里的秘密
-          <button class="refresh-btn" onclick="loadMessages()">🔄 刷新</button>
-        </h2>
-        <div class="messages" id="messageList">
-          <div class="loading">加载中...</div>
-        </div>
+    <div class="feed-section">
+      <div class="feed-header">
+        <h2 class="section-title">📜 树洞里的秘密</h2>
+        <button class="refresh-btn" onclick="loadMessages()">🔄 刷新</button>
+      </div>
+      <div class="messages" id="messageList">
+        <div class="loading">加载中...</div>
       </div>
     </div>
 
@@ -388,7 +448,39 @@
     const postBtn = document.getElementById('postBtn');
     const messageList = document.getElementById('messageList');
     const toast = document.getElementById('toast');
+    const themeIcon = document.getElementById('themeIcon');
+    const themeText = document.getElementById('themeText');
 
+    // Theme management
+    function getTheme() {
+      return localStorage.getItem('theme') || 'dark';
+    }
+
+    function setTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      localStorage.setItem('theme', theme);
+      updateThemeButton(theme);
+    }
+
+    function updateThemeButton(theme) {
+      if (theme === 'dark') {
+        themeIcon.textContent = '🌙';
+        themeText.textContent = '深色模式';
+      } else {
+        themeIcon.textContent = '☀️';
+        themeText.textContent = '浅色模式';
+      }
+    }
+
+    function toggleTheme() {
+      const current = getTheme();
+      setTheme(current === 'dark' ? 'light' : 'dark');
+    }
+
+    // Initialize theme
+    setTheme(getTheme());
+
+    // Character count
     messageInput.addEventListener('input', () => {
       const len = messageInput.value.length;
       charCount.textContent = `${len} / 1000`;
