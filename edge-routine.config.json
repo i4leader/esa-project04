@@ -1,0 +1,16 @@
+{
+  "name": "ephemeral-message-board",
+  "main": "dist/index.js",
+  "kv_namespaces": [
+    {
+      "binding": "MESSAGE_KV",
+      "id": "your-kv-namespace-id"
+    }
+  ],
+  "routes": [
+    {
+      "pattern": "/api/*",
+      "script": "ephemeral-message-board"
+    }
+  ]
+}
