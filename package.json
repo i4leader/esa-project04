@@ -5,7 +5,7 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "node build.cjs",
     "dev": "npx tsx src/local-server.ts",
     "test": "vitest run",
     "test:watch": "vitest"

@@ -86,16 +86,26 @@ curl http://localhost:3000/api/feed
 
 ## 部署到 ESA Edge Routine
 
-1. 构建项目：
-   ```bash
-   npm run build
+1. 在阿里云 ESA 控制台创建 Edge KV 命名空间
+
+2. 更新 `esa.jsonc` 中的 KV 命名空间 ID：
+   ```json
+   {
+     "entry": "src/index.js",
+     "kv": [
+       {
+         "binding": "MESSAGE_KV",
+         "namespace": "your-actual-kv-namespace-id"
+       }
+     ]
+   }
    ```
 
-2. 在阿里云 ESA 控制台创建 Edge KV 命名空间
+3. 推送代码到 GitHub 仓库
 
-3. 更新 `edge-routine.config.json` 中的 KV 命名空间 ID
+4. 在 ESA 控制台创建 Edge Routine 并关联 GitHub 仓库
 
-4. 部署 Edge Routine 并绑定域名
+5. 绑定域名并配置路由
 
 ## 项目结构
 

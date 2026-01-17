@@ -1,14 +1,9 @@
 {
-    "build": {
-        "command": "npm run build"
-    },
-    "assets": {
-        "directory": "dist"
-    },
-    "routes": [
+    "entry": "src/index.js",
+    "kv": [
         {
-            "src": ".*",
-            "dest": "/index.html"
+            "binding": "MESSAGE_KV",
+            "namespace": "your-kv-namespace-id"
         }
     ]
 }
