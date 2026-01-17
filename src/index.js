@@ -67,56 +67,85 @@ function getBucketKey(date, bucketIndex) {
 }
 
 async function saveMessage(kv, message) {
-  const dateStr = getDateString(message.createdAt);
-  
-  let bucketIndex = 0;
-  let bucketKey = getBucketKey(dateStr, bucketIndex);
-  let messages = [];
-
-  while (true) {
-    const existing = await kv.get(bucketKey);
+  try {
+    const dateStr = getDateString(message.createdAt);
     
-    if (existing === null) {
-      messages = [];
-      break;
+    let bucketIndex = 0;
+    let bucketKey = getBucketKey(dateStr, bucketIndex);
+    let messages = [];
+
+    while (true) {
+      try {
+        const existing = await kv.get(bucketKey);
+        
+        if (existing === null) {
+          messages = [];
+          break;
+        }
+
+        messages = JSON.parse(existing);
+        const currentSize = new TextEncoder().encode(existing).length;
+        const messageSize = new TextEncoder().encode(JSON.stringify(message)).length;
+
+        if (currentSize + messageSize + 1 < MAX_BUCKET_SIZE) {
+          break;
+        }
+
+        bucketIndex++;
+        bucketKey = getBucketKey(dateStr, bucketIndex);
+      } catch (kvError) {
+        console.error('KV get error:', kvError);
+        throw new Error('Failed to read from storage');
+      }
     }
 
-    messages = JSON.parse(existing);
-    const currentSize = new TextEncoder().encode(existing).length;
-    const messageSize = new TextEncoder().encode(JSON.stringify(message)).length;
-
-    if (currentSize + messageSize + 1 < MAX_BUCKET_SIZE) {
-      break;
+    messages.push(message);
+    
+    try {
+      await kv.put(bucketKey, JSON.stringify(messages));
+    } catch (kvError) {
+      console.error('KV put error:', kvError);
+      throw new Error('Failed to save to storage');
     }
-
-    bucketIndex++;
-    bucketKey = getBucketKey(dateStr, bucketIndex);
+  } catch (error) {
+    console.error('saveMessage error:', error);
+    throw error;
   }
-
-  messages.push(message);
-  await kv.put(bucketKey, JSON.stringify(messages));
 }
 
 async function getMessagesForDate(kv, date) {
-  const allMessages = [];
-  let bucketIndex = 0;
+  try {
+    const allMessages = [];
+    let bucketIndex = 0;
 
-  while (true) {
-    const bucketKey = getBucketKey(date, bucketIndex);
-    const data = await kv.get(bucketKey);
+    while (true) {
+      const bucketKey = getBucketKey(date, bucketIndex);
+      
+      try {
+        const data = await kv.get(bucketKey);
 
-    if (data === null) {
-      break;
+        if (data === null) {
+          break;
+        }
+
+        const messages = JSON.parse(data);
+        allMessages.push(...messages);
+        bucketIndex++;
+
+        if (bucketIndex > 99) break;
+      } catch (kvError) {
+        console.error(`KV get error for bucket ${bucketKey}:`, kvError);
+        // Continue to next bucket instead of failing completely
+        bucketIndex++;
+        if (bucketIndex > 99) break;
+      }
     }
 
-    const messages = JSON.parse(data);
-    allMessages.push(...messages);
-    bucketIndex++;
-
-    if (bucketIndex > 99) break;
+    return allMessages;
+  } catch (error) {
+    console.error('getMessagesForDate error:', error);
+    return []; // Return empty array instead of throwing
   }
-
-  return allMessages;
 }
 
 // Response helpers
@@ -170,29 +199,42 @@ async function getFeed(kv) {
 // API handlers
 async function handleCreateMessage(request, kv) {
   try {
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch (parseError) {
+      console.error('JSON parse error:', parseError);
+      return errorResponse('Invalid JSON body', 400);
+    }
     
     if (!body || typeof body.content !== 'string') {
       return errorResponse('Missing or invalid content field', 400);
     }
 
-    const message = await createMessage(kv, body.content);
-    
-    return jsonResponse({
-      success: true,
-      data: message,
-    }, 201);
+    try {
+      const message = await createMessage(kv, body.content);
+      
+      return jsonResponse({
+        success: true,
+        data: message,
+      }, 201);
+    } catch (createError) {
+      console.error('Create message error:', createError);
+      
+      const message = createError.message || 'Unknown error';
+      
+      if (message.includes('empty') || message.includes('exceeds')) {
+        return errorResponse(message, 400);
+      }
+      
+      if (message.includes('storage')) {
+        return errorResponse('Storage service temporarily unavailable', 503);
+      }
+      
+      return errorResponse('Internal server error', 500);
+    }
   } catch (error) {
-    if (error instanceof SyntaxError) {
-      return errorResponse('Invalid JSON body', 400);
-    }
-    
-    const message = error.message || 'Unknown error';
-    
-    if (message.includes('empty') || message.includes('exceeds')) {
-      return errorResponse(message, 400);
-    }
-    
+    console.error('handleCreateMessage error:', error);
     return errorResponse('Internal server error', 500);
   }
 }
@@ -205,7 +247,8 @@ async function handleGetFeed(kv) {
       success: true,
       data: messages,
     });
-  } catch {
+  } catch (error) {
+    console.error('handleGetFeed error:', error);
     return errorResponse('Internal server error', 500);
   }
 }
@@ -823,6 +866,24 @@ async function handleRequest(request, kv) {
     return handleGetFeed(kv);
   }
 
+  // Test endpoint to check KV connectivity
+  if (path === '/api/test' && method === 'GET') {
+    try {
+      await kv.put('test-key', 'test-value');
+      const result = await kv.get('test-key');
+      await kv.delete('test-key');
+      
+      return jsonResponse({
+        success: true,
+        message: 'KV is working',
+        test: result === 'test-value'
+      });
+    } catch (error) {
+      console.error('KV test error:', error);
+      return errorResponse('KV test failed: ' + error.message, 500);
+    }
+  }
+
   if (path === '/api/post' || path === '/api/feed') {
     return errorResponse('Method not allowed', 405);
   }
@@ -838,7 +899,30 @@ async function handleRequest(request, kv) {
 
 // Export for Edge Routine
 export default {
-  async fetch(request, env) {
-    return handleRequest(request, env.MESSAGE_KV);
+  async fetch(request, env, ctx) {
+    try {
+      // Check if KV is available
+      if (!env.MESSAGE_KV) {
+        console.error('MESSAGE_KV not found in environment');
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'KV storage not configured'
+        }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      
+      return await handleRequest(request, env.MESSAGE_KV);
+    } catch (error) {
+      console.error('Edge Routine error:', error);
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Internal server error'
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
   },
 };
