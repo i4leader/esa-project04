@@ -901,24 +901,37 @@ async function handleRequest(request, kv) {
 export default {
   async fetch(request, env, ctx) {
     try {
-      // Check if KV is available
-      if (!env.MESSAGE_KV) {
-        console.error('MESSAGE_KV not found in environment');
+      // Debug: log all available environment variables
+      console.log('Available env keys:', Object.keys(env));
+      console.log('MESSAGE_KV available:', !!env.MESSAGE_KV);
+      console.log('esa-pro04 available:', !!env['esa-pro04']);
+      
+      // Try different possible KV binding names
+      let kv = env.MESSAGE_KV || env['esa-pro04'] || env.KV || env.kv;
+      
+      if (!kv) {
+        console.error('No KV found. Available env:', Object.keys(env));
         return new Response(JSON.stringify({
           success: false,
-          error: 'KV storage not configured'
+          error: 'KV storage not configured',
+          debug: {
+            availableEnv: Object.keys(env),
+            hasMessageKV: !!env.MESSAGE_KV,
+            hasEsaPro04: !!env['esa-pro04']
+          }
         }), {
           status: 500,
           headers: { 'Content-Type': 'application/json' }
         });
       }
       
-      return await handleRequest(request, env.MESSAGE_KV);
+      return await handleRequest(request, kv);
     } catch (error) {
       console.error('Edge Routine error:', error);
       return new Response(JSON.stringify({
         success: false,
-        error: 'Internal server error'
+        error: 'Internal server error',
+        details: error.message
       }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }

@@ -1,9 +1,9 @@
 {
   "name": "ephemeral-message-board",
-  "main": "dist/index.js",
+  "main": "src/index.js",
   "kv_namespaces": [
     {
-      "binding": "esa-pro04",
+      "binding": "MESSAGE_KV",
       "id": "950997394311434240"
     }
   ],
