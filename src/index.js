@@ -1,8 +1,15 @@
 /**
- * Ephemeral Message Board - Client-side Storage Version
+ * Ephemeral Message Board - Shared Storage Version
  * 
- * This version stores messages in browser localStorage for simplicity
+ * This version uses server-side storage that all users can see
  */
+
+const MAX_MESSAGE_LENGTH = 1000;
+const MESSAGE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+// Global storage that persists across requests (Cloudflare Durable Objects style)
+// In a real Edge Runtime, this would be replaced with proper persistent storage
+let globalMessages = [];
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -15,11 +22,121 @@ function getCurrentTimestamp() {
   return Date.now();
 }
 
+function isExpired(createdAt, now = getCurrentTimestamp()) {
+  return now - createdAt > MESSAGE_TTL_MS;
+}
+
+function validateContent(content) {
+  if (!content || content.trim().length === 0) {
+    return {
+      valid: false,
+      error: 'Message content cannot be empty',
+    };
+  }
+
+  if (content.length > MAX_MESSAGE_LENGTH) {
+    return {
+      valid: false,
+      error: `Message content exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters`,
+    };
+  }
+
+  return { valid: true };
+}
+
+function cleanExpiredMessages() {
+  const now = getCurrentTimestamp();
+  globalMessages = globalMessages.filter(msg => !isExpired(msg.createdAt, now));
+}
+
+function saveMessage(message) {
+  cleanExpiredMessages();
+  globalMessages.push(message);
+}
+
+function getValidMessages() {
+  cleanExpiredMessages();
+  return globalMessages
+    .slice() // Create a copy
+    .sort((a, b) => b.createdAt - a.createdAt);
+}
+
 function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
     headers: CORS_HEADERS,
   });
+}
+
+function errorResponse(message, status) {
+  return jsonResponse({ success: false, error: message }, status);
+}
+
+function createMessage(content) {
+  const validation = validateContent(content);
+  if (!validation.valid) {
+    throw new Error(validation.error);
+  }
+
+  const message = {
+    id: crypto.randomUUID(),
+    content: content,
+    createdAt: getCurrentTimestamp(),
+  };
+
+  saveMessage(message);
+  return message;
+}
+
+function getFeed() {
+  return getValidMessages();
+}
+
+async function handleCreateMessage(request) {
+  try {
+    let body;
+    try {
+      body = await request.json();
+    } catch (parseError) {
+      return errorResponse('Invalid JSON body', 400);
+    }
+    
+    if (!body || typeof body.content !== 'string') {
+      return errorResponse('Missing or invalid content field', 400);
+    }
+
+    try {
+      const message = createMessage(body.content);
+      
+      return jsonResponse({
+        success: true,
+        data: message,
+      }, 201);
+    } catch (createError) {
+      const message = createError.message || 'Unknown error';
+      
+      if (message.includes('empty') || message.includes('exceeds')) {
+        return errorResponse(message, 400);
+      }
+      
+      return errorResponse('Internal server error', 500);
+    }
+  } catch (error) {
+    return errorResponse('Internal server error', 500);
+  }
+}
+
+async function handleGetFeed() {
+  try {
+    const messageList = getFeed();
+    
+    return jsonResponse({
+      success: true,
+      data: messageList,
+    });
+  } catch (error) {
+    return errorResponse('Internal server error', 500);
+  }
 }
 
 function handleOptions() {
@@ -541,76 +658,52 @@ const HTML_CONTENT = `<!DOCTYPE html>
       postBtn.textContent = '发送中...';
 
       try {
-        // Create message locally
-        const message = {
-          id: crypto.randomUUID(),
-          content: content,
-          createdAt: Date.now()
-        };
+        const response = await fetch(\`\${API_BASE}/api/post\`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content })
+        });
 
-        // Save to localStorage
-        const messages = getStoredMessages();
-        messages.push(message);
-        localStorage.setItem('treehole_messages', JSON.stringify(messages));
+        const data = await response.json();
 
-        messageInput.value = '';
-        charCount.textContent = '0 / 1000';
-        showToast('已投入树洞 🌳');
-        loadMessages();
+        if (data.success) {
+          messageInput.value = '';
+          charCount.textContent = '0 / 1000';
+          showToast('已投入树洞 🌳');
+          loadMessages();
+        } else {
+          showToast(data.error || '发送失败', 'error');
+        }
       } catch (error) {
-        showToast('发送失败，请重试', 'error');
+        showToast('网络错误，请重试', 'error');
       } finally {
         postBtn.disabled = false;
         postBtn.textContent = '投入树洞';
       }
     }
 
-    function getStoredMessages() {
-      try {
-        const stored = localStorage.getItem('treehole_messages');
-        if (!stored) return [];
-        
-        const messages = JSON.parse(stored);
-        const now = Date.now();
-        const MESSAGE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-        
-        // Filter out expired messages
-        const validMessages = messages.filter(msg => {
-          return now - msg.createdAt <= MESSAGE_TTL_MS;
-        });
-        
-        // Update localStorage with filtered messages
-        localStorage.setItem('treehole_messages', JSON.stringify(validMessages));
-        
-        return validMessages;
-      } catch (error) {
-        console.error('Error reading messages:', error);
-        return [];
-      }
-    }
-
     async function loadMessages() {
       try {
-        const messages = getStoredMessages();
-        
-        if (messages.length === 0) {
-          messageList.innerHTML = \`
-            <div class="empty-state">
-              <div class="icon">🌲</div>
-              <p>树洞里还没有秘密...</p>
-              <p>成为第一个分享的人吧！</p>
-            </div>
-          \`;
-        } else {
-          // Sort by creation time (newest first)
-          messages.sort((a, b) => b.createdAt - a.createdAt);
-          
-          messageList.innerHTML = messages.map(msg => \`
-            <div class="message">
-              <div class="message-content">\${escapeHtml(msg.content)}</div>
-              <div class="message-time">\${timeAgo(msg.createdAt)}</div>
-            </div>
-          \`).join('');
+        const response = await fetch(\`\${API_BASE}/api/feed\`);
+        const data = await response.json();
+
+        if (data.success && data.data) {
+          if (data.data.length === 0) {
+            messageList.innerHTML = \`
+              <div class="empty-state">
+                <div class="icon">🌲</div>
+                <p>树洞里还没有秘密...</p>
+                <p>成为第一个分享的人吧！</p>
+              </div>
+            \`;
+          } else {
+            messageList.innerHTML = data.data.map(msg => \`
+              <div class="message">
+                <div class="message-content">\${escapeHtml(msg.content)}</div>
+                <div class="message-time">\${timeAgo(msg.createdAt)}</div>
+              </div>
+            \`).join('');
+          }
         }
       } catch (error) {
         messageList.innerHTML = \`
@@ -650,16 +743,30 @@ async function handleRequest(request) {
     return handleOptions();
   }
 
-  // Simple test endpoint
+  // API routes
+  if (path === '/api/post' && method === 'POST') {
+    return handleCreateMessage(request);
+  }
+
+  if (path === '/api/feed' && method === 'GET') {
+    return handleGetFeed();
+  }
+
+  // Test endpoint
   if (path === '/api/test' && method === 'GET') {
     return jsonResponse({
       success: true,
-      message: 'API is working - using client-side storage',
+      message: 'API is working with shared storage',
+      messageCount: globalMessages.length,
       timestamp: getCurrentTimestamp()
     });
   }
 
-  // Serve HTML for all routes
+  if (path.startsWith('/api/')) {
+    return errorResponse('API endpoint not found', 404);
+  }
+
+  // Serve HTML for all other routes
   return new Response(HTML_CONTENT, {
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
