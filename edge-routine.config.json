@@ -3,8 +3,8 @@
   "main": "dist/index.js",
   "kv_namespaces": [
     {
-      "binding": "MESSAGE_KV",
-      "id": "your-kv-namespace-id"
+      "binding": "esa-pro04",
+      "id": "950997394311434240"
     }
   ],
   "routes": [
