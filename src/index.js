@@ -1,15 +1,14 @@
 /**
  * Edge Routine Entry Point for Ephemeral Message Board
  * 
- * This is the main entry point for ESA Edge Routine.
- * It handles incoming HTTP requests and routes them to the appropriate handlers.
+ * This version uses in-memory storage instead of KV for simplicity
  */
 
-// Simple JavaScript version without TypeScript compilation
-
 const MAX_MESSAGE_LENGTH = 1000;
-const MAX_BUCKET_SIZE = 1.5 * 1024 * 1024; // 1.5 MB
 const MESSAGE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+// In-memory storage (will reset when Edge Routine restarts)
+let messages = [];
 
 // CORS headers for all responses
 const CORS_HEADERS = {
@@ -26,19 +25,6 @@ function getCurrentTimestamp() {
 
 function isExpired(createdAt, now = getCurrentTimestamp()) {
   return now - createdAt > MESSAGE_TTL_MS;
-}
-
-function getDateString(timestamp) {
-  const date = new Date(timestamp);
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(date.getUTCDate()).padStart(2, '0');
-  return `${year}${month}${day}`;
-}
-
-function getPreviousDateString(timestamp) {
-  const previousDay = timestamp - 24 * 60 * 60 * 1000;
-  return getDateString(previousDay);
 }
 
 // Message validation
@@ -60,92 +46,20 @@ function validateContent(content) {
   return { valid: true };
 }
 
-// Storage functions
-function getBucketKey(date, bucketIndex) {
-  const paddedIndex = String(bucketIndex).padStart(2, '0');
-  return `d:${date}:b:${paddedIndex}`;
+// Storage functions (in-memory)
+function saveMessage(message) {
+  messages.push(message);
+  
+  // Clean up expired messages to prevent memory leak
+  const now = getCurrentTimestamp();
+  messages = messages.filter(msg => !isExpired(msg.createdAt, now));
 }
 
-async function saveMessage(kv, message) {
-  try {
-    const dateStr = getDateString(message.createdAt);
-    
-    let bucketIndex = 0;
-    let bucketKey = getBucketKey(dateStr, bucketIndex);
-    let messages = [];
-
-    while (true) {
-      try {
-        const existing = await kv.get(bucketKey);
-        
-        if (existing === null) {
-          messages = [];
-          break;
-        }
-
-        messages = JSON.parse(existing);
-        const currentSize = new TextEncoder().encode(existing).length;
-        const messageSize = new TextEncoder().encode(JSON.stringify(message)).length;
-
-        if (currentSize + messageSize + 1 < MAX_BUCKET_SIZE) {
-          break;
-        }
-
-        bucketIndex++;
-        bucketKey = getBucketKey(dateStr, bucketIndex);
-      } catch (kvError) {
-        console.error('KV get error:', kvError);
-        throw new Error('Failed to read from storage');
-      }
-    }
-
-    messages.push(message);
-    
-    try {
-      await kv.put(bucketKey, JSON.stringify(messages));
-    } catch (kvError) {
-      console.error('KV put error:', kvError);
-      throw new Error('Failed to save to storage');
-    }
-  } catch (error) {
-    console.error('saveMessage error:', error);
-    throw error;
-  }
-}
-
-async function getMessagesForDate(kv, date) {
-  try {
-    const allMessages = [];
-    let bucketIndex = 0;
-
-    while (true) {
-      const bucketKey = getBucketKey(date, bucketIndex);
-      
-      try {
-        const data = await kv.get(bucketKey);
-
-        if (data === null) {
-          break;
-        }
-
-        const messages = JSON.parse(data);
-        allMessages.push(...messages);
-        bucketIndex++;
-
-        if (bucketIndex > 99) break;
-      } catch (kvError) {
-        console.error(`KV get error for bucket ${bucketKey}:`, kvError);
-        // Continue to next bucket instead of failing completely
-        bucketIndex++;
-        if (bucketIndex > 99) break;
-      }
-    }
-
-    return allMessages;
-  } catch (error) {
-    console.error('getMessagesForDate error:', error);
-    return []; // Return empty array instead of throwing
-  }
+function getValidMessages() {
+  const now = getCurrentTimestamp();
+  return messages
+    .filter(msg => !isExpired(msg.createdAt, now))
+    .sort((a, b) => b.createdAt - a.createdAt);
 }
 
 // Response helpers
@@ -161,7 +75,7 @@ function errorResponse(message, status) {
 }
 
 // Message service
-async function createMessage(kv, content) {
+function createMessage(content) {
   const validation = validateContent(content);
   if (!validation.valid) {
     throw new Error(validation.error);
@@ -173,31 +87,16 @@ async function createMessage(kv, content) {
     createdAt: getCurrentTimestamp(),
   };
 
-  await saveMessage(kv, message);
+  saveMessage(message);
   return message;
 }
 
-async function getFeed(kv) {
-  const now = getCurrentTimestamp();
-  const todayStr = getDateString(now);
-  const yesterdayStr = getPreviousDateString(now);
-
-  const [todayMessages, yesterdayMessages] = await Promise.all([
-    getMessagesForDate(kv, todayStr),
-    getMessagesForDate(kv, yesterdayStr),
-  ]);
-
-  const allMessages = [...todayMessages, ...yesterdayMessages];
-  const validMessages = allMessages.filter(
-    (msg) => !isExpired(msg.createdAt, now)
-  );
-
-  validMessages.sort((a, b) => b.createdAt - a.createdAt);
-  return validMessages;
+function getFeed() {
+  return getValidMessages();
 }
 
 // API handlers
-async function handleCreateMessage(request, kv) {
+async function handleCreateMessage(request) {
   try {
     let body;
     try {
@@ -212,7 +111,7 @@ async function handleCreateMessage(request, kv) {
     }
 
     try {
-      const message = await createMessage(kv, body.content);
+      const message = createMessage(body.content);
       
       return jsonResponse({
         success: true,
@@ -227,10 +126,6 @@ async function handleCreateMessage(request, kv) {
         return errorResponse(message, 400);
       }
       
-      if (message.includes('storage')) {
-        return errorResponse('Storage service temporarily unavailable', 503);
-      }
-      
       return errorResponse('Internal server error', 500);
     }
   } catch (error) {
@@ -239,13 +134,13 @@ async function handleCreateMessage(request, kv) {
   }
 }
 
-async function handleGetFeed(kv) {
+async function handleGetFeed() {
   try {
-    const messages = await getFeed(kv);
+    const messageList = getFeed();
     
     return jsonResponse({
       success: true,
-      data: messages,
+      data: messageList,
     });
   } catch (error) {
     console.error('handleGetFeed error:', error);
@@ -848,7 +743,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
 </html>`;
 
 // Main request handler
-async function handleRequest(request, kv) {
+async function handleRequest(request) {
   const url = new URL(request.url);
   const path = url.pathname;
   const method = request.method;
@@ -859,29 +754,21 @@ async function handleRequest(request, kv) {
 
   // API routes
   if (path === '/api/post' && method === 'POST') {
-    return handleCreateMessage(request, kv);
+    return handleCreateMessage(request);
   }
 
   if (path === '/api/feed' && method === 'GET') {
-    return handleGetFeed(kv);
+    return handleGetFeed();
   }
 
-  // Test endpoint to check KV connectivity
+  // Test endpoint
   if (path === '/api/test' && method === 'GET') {
-    try {
-      await kv.put('test-key', 'test-value');
-      const result = await kv.get('test-key');
-      await kv.delete('test-key');
-      
-      return jsonResponse({
-        success: true,
-        message: 'KV is working',
-        test: result === 'test-value'
-      });
-    } catch (error) {
-      console.error('KV test error:', error);
-      return errorResponse('KV test failed: ' + error.message, 500);
-    }
+    return jsonResponse({
+      success: true,
+      message: 'API is working with in-memory storage',
+      messageCount: messages.length,
+      timestamp: getCurrentTimestamp()
+    });
   }
 
   if (path === '/api/post' || path === '/api/feed') {
@@ -901,31 +788,7 @@ async function handleRequest(request, kv) {
 export default {
   async fetch(request, env, ctx) {
     try {
-      // Debug: log all available environment variables
-      console.log('Available env keys:', Object.keys(env));
-      console.log('MESSAGE_KV available:', !!env.MESSAGE_KV);
-      console.log('esa-pro04 available:', !!env['esa-pro04']);
-      
-      // Try different possible KV binding names
-      let kv = env.MESSAGE_KV || env['esa-pro04'] || env.KV || env.kv;
-      
-      if (!kv) {
-        console.error('No KV found. Available env:', Object.keys(env));
-        return new Response(JSON.stringify({
-          success: false,
-          error: 'KV storage not configured',
-          debug: {
-            availableEnv: Object.keys(env),
-            hasMessageKV: !!env.MESSAGE_KV,
-            hasEsaPro04: !!env['esa-pro04']
-          }
-        }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-      
-      return await handleRequest(request, kv);
+      return await handleRequest(request);
     } catch (error) {
       console.error('Edge Routine error:', error);
       return new Response(JSON.stringify({
