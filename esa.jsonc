@@ -1,9 +1,3 @@
 {
-    "entry": "src/index.js",
-    "kv": [
-        {
-            "binding": "MESSAGE_KV",
-            "namespace": "950997394311434240"
-        }
-    ]
+    "entry": "src/index.js"
 }
